@@ -1,0 +1,146 @@
+#!/bin/bash
+
+sourcedir="$1"
+
+# 压缩参数，取值：1-51，值越小越清晰但体积越大，一般18-26
+crf=23
+destdir="$sourcedir/compressed"
+
+# 压缩主命令
+function compress(){
+    # 开始计时
+    startTime=$(date +"%Y-%m-%d %H:%M:%S")
+    output="$destdir/$filename/${filename}_${width}x$height.mp4"
+    echo "  └─开始压缩... 压缩尺寸：$width x $height"
+    if [ ! -d "$destdir/$filename" ]; then
+        mkdir -p -- "$destdir/$filename"
+    fi
+
+    ffmpeg \
+        -i "$media" \
+        -preset veryslow \
+        -threads 11 \
+        -c:v libx264 \
+        -crf $crf \
+        -s "$width"x"$height" \
+        "$output" -y > /dev/null 2>&1
+
+    # 计算文件压缩前后体积
+    osize=$(du -h "$media" | cut -f1)
+    fsize=$(du -h "$output" | cut -f1)
+    # 结束计时
+    endTime=$(date +"%Y-%m-%d %H:%M:%S")
+    st=$(date -d "$startTime" +%s)
+    et=$(date -d "$endTime" +%s)
+    sumTime=$((et - st))
+    echo "  └─原体积：$osize  压缩后：$fsize"
+    echo "  └─本次压缩耗费 $sumTime 秒"
+    echo ""
+}
+
+function getinfo(){
+    if [ ! -f "$media" ]; then
+        echo "目标目录内没有可压缩的文件"
+        exit 0
+    fi
+
+    # ffprobe 获取宽高
+    width=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of default=noprint_wrappers=1:nokey=1 "$media")
+    height=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=noprint_wrappers=1:nokey=1 "$media")
+    filename=$(basename "$media" | cut -d. -f1)
+    fullname=$(basename "$media")
+
+    echo "开始处理 "$fullname""
+
+    # 取视频最长边像素判定视频方向
+    if [ $width -gt $height ]; then
+        longest=$width
+        echo "  └─检测到：横向视频    分辨率：$width x $height"
+    elif [ $height -gt $width ]; then
+        longest=$height
+        echo "  └─检测到：竖向视频    分辨率：$width x $height"
+    else
+        longest=$height
+        echo "  └─检测到：正方形视频    分辨率：$width x $height"
+    fi
+}
+
+# 几个依赖判定
+if [ ! -d "$sourcedir" ];then
+    sourcedir=${HOME}
+fi
+if [ ! "$(command -v ffmpeg)" ]; then
+    echo "没有安装 ffmpeg"
+    echo "请把 ffmpeg 安装一个先"
+    exit 126
+fi
+
+# 总计时
+ehlelt=$(date +"%Y-%m-%d %H:%M:%S")
+
+OLDIFS=$IFS
+IFS=$(echo -en "\n\b")
+
+# 开始遍历目录内媒体文件
+# filelist=$(find "$sourcedir" -path "$destdir" -prune -type f -o -iname "*.mp4")
+filelist=`find "$sourcedir" -path "$destdir" -prune -type f \
+    -o -iname "*.mp4" \
+    -o -iname "*.mov" \
+    -o -iname "*.webm" \
+    -o -iname "*.avi" \
+    -o -iname "*.wmv" \
+    -o -iname "*.m4v" \
+    -o -iname "*.flv" \
+    -o -iname "*.rm" \
+    -o -iname "*.rmvb" \
+    -o -iname "*.vob" \
+    -o -iname "*.mkv"
+    `
+
+for media in $filelist
+do
+    getinfo
+    if [ ! -d "$destdir/$filename" ]; then
+        compress
+        # 通过最长边判定视频大小压缩不同的尺寸
+        if [ $longest -ge 2560 ]; then
+            width=$((width / 2))
+            height=$((height /2))
+            echo "  └─检测到 "$fullname" 是2k以上视频，再压个中等尺寸视频"
+            compress
+
+            width=$((width / 4))
+            height=$((height /4))
+            echo "  └─现在开始进一步为 "$fullname" 压缩小尺寸视频"
+            compress
+
+        elif [ $longest -ge 1280 ] && [ $longest -lt 2560 ]; then
+            width=$((width / 2))
+            height=$((height /2))
+            echo "  └─检测到 "$fullname" 是较大尺寸视频，再压个小尺寸视频"
+            compress
+
+        fi
+        mv -- "$media" "$destdir/$filename"
+        sleep 1.5
+    else
+        echo "  └─该文件似乎压缩一半中断...下次再盘它"
+        rm -rf -- "$destdir/$filename"
+    fi
+    
+done
+
+IFS=$OLDIFS
+
+# 总计时结束
+suul=$(date +"%Y-%m-%d %H:%M:%S")
+eht=$(date -d "$ehlelt" +%s)
+suult=$(date -d "$suul" +%s)
+hregt=$((suult - eht))
+mint=$((hregt / 60))
+
+echo ""
+echo "全部过程使用了 $hregt 秒，也就是 $mint 分钟吧"
+echo ""
+echo ""
+echo ""
