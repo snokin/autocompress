@@ -1,5 +1,5 @@
 # what is this
-- Auto compress videos under specific folder
+- Shell script that auto compress videos under specific folder
 - Detect the resolutions of videos and made multiple size files of compressed videos
 # Usage
 - copy to /usr/bin  
